@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Bot } = require('grammy');
+const wol = require('wake_on_lan');
 
 // Create bot instance
 const bot = new Bot(process.env.BOT_TOKEN);
@@ -16,6 +17,7 @@ bot.command('help', (ctx) => {
     '/start - Start the bot\n' +
     '/help - Show this help message\n' +
     '/about - Learn about this bot\n' +
+    '/wake - Send Wake-on-LAN magic packet\n' +
     'Or just send me a message!'
   );
 });
@@ -23,6 +25,26 @@ bot.command('help', (ctx) => {
 // About command
 bot.command('about', (ctx) => {
   ctx.reply('I\'m a simple Telegram bot built with grammY framework. More features coming soon!');
+});
+
+// Wake-on-LAN command
+bot.command('wake', (ctx) => {
+  const macAddress = process.env.TARGET_MAC_ADDRESS;
+  
+  if (!macAddress) {
+    ctx.reply('Error: MAC address not configured in .env file');
+    return;
+  }
+  
+  wol.wake(macAddress, (error) => {
+    if (error) {
+      ctx.reply(`Failed to send magic packet: ${error.message}`);
+      console.error('WOL Error:', error);
+    } else {
+      ctx.reply(`Magic packet sent to ${macAddress}!`);
+      console.log(`Magic packet sent to ${macAddress}`);
+    }
+  });
 });
 
 // Echo any text message
