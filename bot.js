@@ -7,7 +7,8 @@ const bot = new Bot(process.env.BOT_TOKEN);
 
 // Start command
 bot.command('start', (ctx) => {
-  ctx.reply('Hello! Welcome to the bot. How can I help you today?');
+  const userId = ctx.from.id;
+  ctx.reply(`Hello! Welcome to the bot. How can I help you today?\n\nYour Telegram User ID is: ${userId}`);
 });
 
 // Help command
@@ -29,6 +30,16 @@ bot.command('about', (ctx) => {
 
 // Wake-on-LAN command
 bot.command('wake', (ctx) => {
+  const authorizedUserId = process.env.AUTHORIZED_USER_ID;
+  const userId = ctx.from.id.toString();
+  
+  // Check if user is authorized
+  if (authorizedUserId && userId !== authorizedUserId) {
+    ctx.reply('Unauthorized: You do not have permission to use this command.');
+    console.log(`Unauthorized wake attempt from user ID: ${userId}`);
+    return;
+  }
+  
   const macAddress = process.env.TARGET_MAC_ADDRESS;
   
   if (!macAddress) {
@@ -42,7 +53,7 @@ bot.command('wake', (ctx) => {
       console.error('WOL Error:', error);
     } else {
       ctx.reply(`Magic packet sent to ${macAddress}!`);
-      console.log(`Magic packet sent to ${macAddress}`);
+      console.log(`Magic packet sent to ${macAddress} by user ${userId}`);
     }
   });
 });
