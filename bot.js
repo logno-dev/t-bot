@@ -34,21 +34,21 @@ bot.command('about', (ctx) => {
 bot.command('wake', (ctx) => {
   const authorizedUserId = process.env.AUTHORIZED_USER_ID;
   const userId = ctx.from.id.toString();
-  
+
   // Check if user is authorized
   if (authorizedUserId && userId !== authorizedUserId) {
     ctx.reply('Unauthorized: You do not have permission to use this command.');
     console.log(`Unauthorized wake attempt from user ID: ${userId}`);
     return;
   }
-  
+
   const macAddress = process.env.TARGET_MAC_ADDRESS;
-  
+
   if (!macAddress) {
     ctx.reply('Error: MAC address not configured in .env file');
     return;
   }
-  
+
   wol.wake(macAddress, (error) => {
     if (error) {
       ctx.reply(`Failed to send magic packet: ${error.message}`);
@@ -64,31 +64,31 @@ bot.command('wake', (ctx) => {
 bot.command('update', (ctx) => {
   const authorizedUserId = process.env.AUTHORIZED_USER_ID;
   const userId = ctx.from.id.toString();
-  
+
   // Check if user is authorized
   if (authorizedUserId && userId !== authorizedUserId) {
     ctx.reply('Unauthorized: You do not have permission to use this command.');
     console.log(`Unauthorized update attempt from user ID: ${userId}`);
     return;
   }
-  
+
   ctx.reply('Updating bot... Pulling latest code from git.');
   console.log(`Update initiated by user ${userId}`);
-  
+
   exec('git pull', (error, stdout, stderr) => {
     if (error) {
       ctx.reply(`Git pull failed: ${error.message}`);
       console.error('Git pull error:', error);
       return;
     }
-    
+
     if (stderr) {
       console.log('Git stderr:', stderr);
     }
-    
+
     ctx.reply(`Git pull complete:\n${stdout}\n\nRestarting bot...`);
     console.log('Git pull output:', stdout);
-    
+
     // Give time for the message to be sent before exiting
     setTimeout(() => {
       console.log('Restarting process...');
@@ -100,10 +100,10 @@ bot.command('update', (ctx) => {
 // Echo any text message
 bot.on('message:text', (ctx) => {
   const text = ctx.message.text;
-  
+
   // Skip if it's a command
   if (text.startsWith('/')) return;
-  
+
   // Simple responses based on keywords
   if (text.toLowerCase().includes('hello') || text.toLowerCase().includes('hi')) {
     ctx.reply('Hey there! How are you doing?');
@@ -111,6 +111,8 @@ bot.on('message:text', (ctx) => {
     ctx.reply('I\'m doing great, thanks for asking! How about you?');
   } else if (text.toLowerCase().includes('bye')) {
     ctx.reply('Goodbye! Have a great day!');
+  } else if (text.toLowerCase().includes('what is the meaning of life')) {
+    ctx.reply('42');
   } else {
     ctx.reply(`You said: ${text}`);
   }
