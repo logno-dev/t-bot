@@ -281,10 +281,6 @@ bot.on('message:text', async (ctx) => {
   if (wordleResult) {
     try {
       await storeWordleResult(ctx, wordleResult);
-      const attemptText = wordleResult.solved
-        ? `${wordleResult.attempts}/6`
-        : 'X/6';
-      ctx.reply(`Saved your Wordle ${wordleResult.gameNumber} result (${attemptText}).`);
     } catch (error) {
       console.error('Failed to save Wordle result:', error);
       ctx.reply('Sorry, I could not save that Wordle result. Please try again later.');
