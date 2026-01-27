@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 const { Bot } = require('grammy');
+const crypto = require('crypto');
 const wol = require('wake_on_lan');
 const { exec } = require('child_process');
 
@@ -49,6 +50,18 @@ const ensureSchema = async () => {
   `);
   await db.execute(
     'CREATE INDEX IF NOT EXISTS telegram_wordle_results_game_number_idx ON telegram_wordle_results (game_number);'
+  );
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+      telegram_user_id TEXT PRIMARY KEY NOT NULL,
+      token TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (telegram_user_id) REFERENCES telegram_users(telegram_user_id) ON DELETE CASCADE
+    );
+  `);
+  await db.execute(
+    'CREATE UNIQUE INDEX IF NOT EXISTS telegram_link_tokens_token_idx ON telegram_link_tokens (token);'
   );
 };
 
@@ -112,12 +125,7 @@ const storeWordleResult = async (ctx, result) => {
         reported_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(telegram_user_id, game_number) DO UPDATE SET
-        attempts = excluded.attempts,
-        solved = excluded.solved,
-        pattern = excluded.pattern,
-        share_text = excluded.share_text,
-        reported_at = excluded.reported_at;
+      ON CONFLICT(telegram_user_id, game_number) DO NOTHING;
     `,
     args: [
       String(user.id),
@@ -129,6 +137,63 @@ const storeWordleResult = async (ctx, result) => {
       now,
     ],
   });
+};
+
+const ensureTelegramUser = async (user) => {
+  const now = Math.floor(Date.now() / 1000);
+  await db.execute({
+    sql: `
+      INSERT INTO telegram_users (telegram_user_id, username, first_name, last_name, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(telegram_user_id) DO UPDATE SET
+        username = excluded.username,
+        first_name = excluded.first_name,
+        last_name = excluded.last_name,
+        updated_at = excluded.updated_at;
+    `,
+    args: [
+      String(user.id),
+      user.username ?? null,
+      user.first_name ?? null,
+      user.last_name ?? null,
+      now,
+      now,
+    ],
+  });
+};
+
+const createLinkToken = async (user) => {
+  const now = Math.floor(Date.now() / 1000);
+  await ensureTelegramUser(user);
+
+  const existing = await db.execute({
+    sql: 'SELECT token FROM telegram_link_tokens WHERE telegram_user_id = ? LIMIT 1;',
+    args: [String(user.id)],
+  });
+
+  if (existing.rows?.length) {
+    const token = existing.rows[0].token;
+    await db.execute({
+      sql: 'UPDATE telegram_link_tokens SET updated_at = ? WHERE telegram_user_id = ?;',
+      args: [now, String(user.id)],
+    });
+    return token;
+  }
+
+  const token = crypto.randomBytes(16).toString('hex');
+
+  await db.execute({
+    sql: `
+      INSERT INTO telegram_link_tokens (telegram_user_id, token, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(telegram_user_id) DO UPDATE SET
+        token = excluded.token,
+        updated_at = excluded.updated_at;
+    `,
+    args: [String(user.id), token, now, now],
+  });
+
+  return token;
 };
 
 // Start command
@@ -144,6 +209,7 @@ bot.command('help', (ctx) => {
     '/start - Start the bot\n' +
     '/help - Show this help message\n' +
     '/about - Learn about this bot\n' +
+    '/link - Get a portal connection token\n' +
     '/wake - Send Wake-on-LAN magic packet (authorized only)\n' +
     '/update - Pull latest code and restart bot (authorized only)\n' +
     'Or just send me a message, including Wordle results!'
@@ -153,6 +219,30 @@ bot.command('help', (ctx) => {
 // About command
 bot.command('about', (ctx) => {
   ctx.reply('I\'m a simple Telegram bot built with grammY framework. More features coming soon!');
+});
+
+// Link command - provides portal connection token
+bot.command('link', async (ctx) => {
+  if (ctx.chat?.type !== 'private') {
+    ctx.reply('Please DM me `/link` to get your connection token.', {
+      parse_mode: 'Markdown',
+    });
+    return;
+  }
+
+  try {
+    const token = await createLinkToken(ctx.from);
+    const portalBaseUrl = process.env.PORTAL_BASE_URL;
+    if (portalBaseUrl) {
+      const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
+      ctx.reply(`Use this link to connect your account:\n${trimmedBase}/connect?token=${token}`);
+    } else {
+      ctx.reply(`Your connection token is:\n${token}`);
+    }
+  } catch (error) {
+    console.error('Failed to create link token:', error);
+    ctx.reply('Sorry, I could not create a connection token right now. Please try again later.');
+  }
 });
 
 // Wake-on-LAN command
