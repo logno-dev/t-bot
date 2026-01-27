@@ -10,6 +10,8 @@ const bot = new Bot(process.env.BOT_TOKEN);
 
 const databaseUrl = process.env.DATABASE_URL;
 const databaseToken = process.env.DATABASE_TOKEN;
+const portalBaseUrl = process.env.PORTAL_BASE_URL || 'https://your-portal.com';
+const portalBotToken = process.env.PORTAL_BOT_API_TOKEN || 'replace-me';
 
 if (!databaseUrl || !databaseToken) {
   throw new Error('DATABASE_URL and DATABASE_TOKEN must be set in the .env file');
@@ -21,6 +23,7 @@ const db = createClient({
 });
 
 const WORDLE_HEADER_RE = /^Wordle\s+([\d,]+)\s+([1-6X])\/6/i;
+const WORDLE_BASE_DATE = new Date(Date.UTC(2021, 5, 19));
 
 const ensureSchema = async () => {
   await db.execute('PRAGMA foreign_keys = ON;');
@@ -93,27 +96,9 @@ const storeWordleResult = async (ctx, result) => {
   const now = Math.floor(Date.now() / 1000);
   const user = ctx.from;
 
-  await db.execute({
-    sql: `
-      INSERT INTO telegram_users (telegram_user_id, username, first_name, last_name, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(telegram_user_id) DO UPDATE SET
-        username = excluded.username,
-        first_name = excluded.first_name,
-        last_name = excluded.last_name,
-        updated_at = excluded.updated_at;
-    `,
-    args: [
-      String(user.id),
-      user.username ?? null,
-      user.first_name ?? null,
-      user.last_name ?? null,
-      now,
-      now,
-    ],
-  });
+  await ensureTelegramUser(user);
 
-  await db.execute({
+  const insertResult = await db.execute({
     sql: `
       INSERT INTO telegram_wordle_results (
         telegram_user_id,
@@ -137,6 +122,59 @@ const storeWordleResult = async (ctx, result) => {
       now,
     ],
   });
+
+  return Number(insertResult.rowsAffected ?? 0) > 0;
+};
+
+const wordleDayFromNumber = (gameNumber) => {
+  const date = new Date(WORDLE_BASE_DATE.getTime());
+  date.setUTCDate(date.getUTCDate() + gameNumber);
+  return date.toISOString().slice(0, 10);
+};
+
+const fetchWordleAnswer = async (wordleDay) => {
+  if (typeof fetch !== 'function') {
+    throw new Error('Global fetch is not available in this Node version');
+  }
+
+  const response = await fetch(`https://www.nytimes.com/svc/wordle/v2/${wordleDay}.json`);
+  if (!response.ok) {
+    throw new Error(`Wordle answer fetch failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data?.solution) {
+    throw new Error('Wordle answer was missing from response');
+  }
+
+  return String(data.solution).toLowerCase();
+};
+
+const awardPortalLetter = async ({ telegramUserId, wordleDay, answer, score }) => {
+  if (!portalBaseUrl || !portalBotToken || portalBotToken === 'replace-me') {
+    console.warn('Portal award skipped: PORTAL_BASE_URL or PORTAL_BOT_API_TOKEN not configured.');
+    return;
+  }
+
+  const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
+  const response = await fetch(`${trimmedBase}/api/award`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-bot-token': portalBotToken,
+    },
+    body: JSON.stringify({
+      telegram_user_id: telegramUserId,
+      wordle_day: wordleDay,
+      answer,
+      score,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    console.error('Portal award failed:', response.status, body);
+  }
 };
 
 const ensureTelegramUser = async (user) => {
@@ -370,7 +408,18 @@ bot.on('message:text', async (ctx) => {
   const wordleResult = parseWordleResult(text);
   if (wordleResult) {
     try {
-      await storeWordleResult(ctx, wordleResult);
+      const inserted = await storeWordleResult(ctx, wordleResult);
+      if (inserted) {
+        const wordleDay = wordleDayFromNumber(wordleResult.gameNumber);
+        const answer = await fetchWordleAnswer(wordleDay);
+        const score = wordleResult.solved ? wordleResult.attempts : 'x';
+        await awardPortalLetter({
+          telegramUserId: String(ctx.from.id),
+          wordleDay,
+          answer,
+          score,
+        });
+      }
     } catch (error) {
       console.error('Failed to save Wordle result:', error);
       ctx.reply('Sorry, I could not save that Wordle result. Please try again later.');
