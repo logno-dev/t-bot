@@ -211,14 +211,62 @@ bot.command('update', (ctx) => {
       console.log('Git stderr:', stderr);
     }
 
-    ctx.reply(`Git pull complete:\n${stdout}\n\nRestarting bot...`);
     console.log('Git pull output:', stdout);
 
-    // Give time for the message to be sent before exiting
-    setTimeout(() => {
-      console.log('Restarting process...');
-      process.exit(0); // PM2 will automatically restart the bot
-    }, 1000);
+    exec('git diff --name-only HEAD@{1} HEAD', (diffError, diffStdout) => {
+      if (diffError) {
+        console.error('Git diff error:', diffError);
+      }
+
+      const changedFiles = diffStdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const needsInstall = changedFiles.some((file) =>
+        ['package.json', 'pnpm-lock.yaml', 'package-lock.json'].includes(file)
+      );
+
+      const finishUpdate = (message) => {
+        ctx.reply(`${message}\n\nRestarting bot...`);
+        setTimeout(() => {
+          console.log('Restarting process...');
+          process.exit(0); // PM2 will automatically restart the bot
+        }, 1000);
+      };
+
+      if (!needsInstall) {
+        finishUpdate(`Git pull complete:\n${stdout}`);
+        return;
+      }
+
+      ctx.reply('Dependencies changed. Installing packages...');
+      exec('pnpm install', (installError, installStdout, installStderr) => {
+        if (installError) {
+          console.error('pnpm install error:', installError);
+          exec('npm install', (npmError, npmStdout, npmStderr) => {
+            if (npmError) {
+              console.error('npm install error:', npmError);
+              ctx.reply(`Dependency install failed:\n${installError.message}\n${npmError.message}`);
+              return;
+            }
+
+            if (npmStderr) {
+              console.log('npm install stderr:', npmStderr);
+            }
+
+            finishUpdate(`Git pull complete:\n${stdout}\n\nDependencies installed with npm.`);
+          });
+          return;
+        }
+
+        if (installStderr) {
+          console.log('pnpm install stderr:', installStderr);
+        }
+
+        finishUpdate(`Git pull complete:\n${stdout}\n\nDependencies installed with pnpm.`);
+      });
+    });
   });
 });
 
