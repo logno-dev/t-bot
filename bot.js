@@ -249,8 +249,6 @@ bot.command('help', (ctx) => {
     '/about - Learn about this bot\n' +
     '/game - How to play the meta game\n' +
     '/link - Get a portal connection token\n' +
-    '/wake - Send Wake-on-LAN magic packet (authorized only)\n' +
-    '/update - Pull latest code and restart bot (authorized only)\n' +
     'Or just send me a message, including Wordle results!'
   );
 });
