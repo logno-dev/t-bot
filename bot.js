@@ -502,9 +502,7 @@ bot.on('message:text', async (ctx) => {
         const awardMessage = awardResult.ok
           ? `Awarded letter (HTTP ${awardResult.status}).`
           : `Award failed (${awardResult.status}).`;
-        ctx.reply(`Wordle saved. ${awardMessage}`);
-      } else {
-        ctx.reply('Wordle already submitted for this day.');
+        console.log(`Portal award result: ${awardMessage}`);
       }
     } catch (error) {
       console.error('Failed to save Wordle result:', error);
