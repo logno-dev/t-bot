@@ -244,7 +244,6 @@ bot.command('start', (ctx) => {
 bot.command('help', (ctx) => {
   ctx.reply(
     'Here are some things you can try:\n' +
-    '/start - Start the bot\n' +
     '/help - Show this help message\n' +
     '/about - Learn about this bot\n' +
     '/game - How to play the meta game\n' +
