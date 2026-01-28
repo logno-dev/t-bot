@@ -153,7 +153,7 @@ const fetchWordleAnswer = async (wordleDay) => {
 const awardPortalLetter = async ({ telegramUserId, wordleDay, answer, score }) => {
   if (!portalBaseUrl || !portalBotToken || portalBotToken === 'replace-me') {
     console.warn('Portal award skipped: PORTAL_BASE_URL or PORTAL_BOT_API_TOKEN not configured.');
-    return;
+    return { ok: false, status: 'skipped' };
   }
 
   const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
@@ -174,7 +174,10 @@ const awardPortalLetter = async ({ telegramUserId, wordleDay, answer, score }) =
   if (!response.ok) {
     const body = await response.text().catch(() => '');
     console.error('Portal award failed:', response.status, body);
+    return { ok: false, status: response.status, body };
   }
+
+  return { ok: true, status: response.status };
 };
 
 const ensureTelegramUser = async (user) => {
@@ -490,12 +493,18 @@ bot.on('message:text', async (ctx) => {
         const wordleDay = wordleDayFromNumber(wordleResult.gameNumber);
         const answer = await fetchWordleAnswer(wordleDay);
         const score = wordleResult.solved ? wordleResult.attempts : 'x';
-        await awardPortalLetter({
+        const awardResult = await awardPortalLetter({
           telegramUserId: String(ctx.from.id),
           wordleDay,
           answer,
           score,
         });
+        const awardMessage = awardResult.ok
+          ? `Awarded letter (HTTP ${awardResult.status}).`
+          : `Award failed (${awardResult.status}).`;
+        ctx.reply(`Wordle saved. ${awardMessage}`);
+      } else {
+        ctx.reply('Wordle already submitted for this day.');
       }
     } catch (error) {
       console.error('Failed to save Wordle result:', error);
