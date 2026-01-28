@@ -22,7 +22,7 @@ const db = createClient({
   authToken: databaseToken,
 });
 
-const WORDLE_HEADER_RE = /^Wordle\s+([\d,]+)\s+([1-6X])\/6/i;
+const WORDLE_HEADER_RE = /^Wordle\s+([\d,]+)\s+([1-6X])\/6\*?/i;
 const WORDLE_BASE_DATE = new Date(Date.UTC(2021, 5, 19));
 
 const ensureSchema = async () => {
@@ -264,6 +264,50 @@ bot.command('game', (ctx) => {
     'Submit your Wordle results in this chat to earn letters in the meta game. ' +
       `Play your earned letters here: ${trimmedBase}`
   );
+});
+
+// Debug command
+bot.command('debug', (ctx) => {
+  const hasPortalUrl = Boolean(process.env.PORTAL_BASE_URL);
+  const hasPortalToken = Boolean(process.env.PORTAL_BOT_API_TOKEN);
+  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+  const hasDatabaseToken = Boolean(process.env.DATABASE_TOKEN);
+
+  ctx.reply(
+    'Debug status:\n' +
+      `PORTAL_BASE_URL set: ${hasPortalUrl}\n` +
+      `PORTAL_BOT_API_TOKEN set: ${hasPortalToken}\n` +
+      `DATABASE_URL set: ${hasDatabaseUrl}\n` +
+      `DATABASE_TOKEN set: ${hasDatabaseToken}\n` +
+      'Note: if Wordle messages are ignored in groups, disable bot privacy mode in BotFather.'
+  );
+});
+
+// API test command
+bot.command('apitest', async (ctx) => {
+  if (!process.env.PORTAL_BASE_URL || !process.env.PORTAL_BOT_API_TOKEN) {
+    ctx.reply('PORTAL_BASE_URL or PORTAL_BOT_API_TOKEN is not set.');
+    return;
+  }
+
+  const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
+
+  try {
+    const response = await fetch(`${trimmedBase}/api/award`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-bot-token': portalBotToken,
+      },
+      body: JSON.stringify({ test: true }),
+    });
+
+    const bodyText = await response.text();
+    ctx.reply(`API test status: ${response.status}\n${bodyText}`);
+  } catch (error) {
+    console.error('API test failed:', error);
+    ctx.reply('API test failed. Check logs for details.');
+  }
 });
 
 // Link command - provides portal connection token
