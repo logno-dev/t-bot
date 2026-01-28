@@ -248,6 +248,8 @@ bot.command('help', (ctx) => {
     '/about - Learn about this bot\n' +
     '/game - How to play the meta game\n' +
     '/link - Get a portal connection token\n' +
+    '/debug - Show debug status\n' +
+    '/debugwordle - Parse a Wordle share\n' +
     'Or just send me a message, including Wordle results!'
   );
 });
@@ -272,6 +274,7 @@ bot.command('debug', (ctx) => {
   const hasPortalToken = Boolean(process.env.PORTAL_BOT_API_TOKEN);
   const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
   const hasDatabaseToken = Boolean(process.env.DATABASE_TOKEN);
+  const chatType = ctx.chat?.type ?? 'unknown';
 
   ctx.reply(
     'Debug status:\n' +
@@ -279,7 +282,27 @@ bot.command('debug', (ctx) => {
       `PORTAL_BOT_API_TOKEN set: ${hasPortalToken}\n` +
       `DATABASE_URL set: ${hasDatabaseUrl}\n` +
       `DATABASE_TOKEN set: ${hasDatabaseToken}\n` +
+      `Chat type: ${chatType}\n` +
       'Note: if Wordle messages are ignored in groups, disable bot privacy mode in BotFather.'
+  );
+});
+
+// Debug Wordle parsing
+bot.command('debugwordle', (ctx) => {
+  const replied = ctx.message?.reply_to_message?.text;
+  if (!replied) {
+    ctx.reply('Reply to a Wordle share message with /debugwordle to see parsing results.');
+    return;
+  }
+
+  const parsed = parseWordleResult(replied);
+  if (!parsed) {
+    ctx.reply('No Wordle result detected in the replied message.');
+    return;
+  }
+
+  ctx.reply(
+    `Parsed Wordle result:\nGame: ${parsed.gameNumber}\nAttempts: ${parsed.attempts ?? 'X'}\nSolved: ${parsed.solved}`
   );
 });
 
@@ -460,6 +483,9 @@ bot.on('message:text', async (ctx) => {
   if (wordleResult) {
     try {
       const inserted = await storeWordleResult(ctx, wordleResult);
+      console.log(
+        `Wordle result received: user=${ctx.from.id} game=${wordleResult.gameNumber} inserted=${inserted}`
+      );
       if (inserted) {
         const wordleDay = wordleDayFromNumber(wordleResult.gameNumber);
         const answer = await fetchWordleAnswer(wordleDay);
