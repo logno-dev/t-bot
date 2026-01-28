@@ -247,6 +247,7 @@ bot.command('help', (ctx) => {
     '/start - Start the bot\n' +
     '/help - Show this help message\n' +
     '/about - Learn about this bot\n' +
+    '/game - How to play the meta game\n' +
     '/link - Get a portal connection token\n' +
     '/wake - Send Wake-on-LAN magic packet (authorized only)\n' +
     '/update - Pull latest code and restart bot (authorized only)\n' +
@@ -257,6 +258,15 @@ bot.command('help', (ctx) => {
 // About command
 bot.command('about', (ctx) => {
   ctx.reply('I\'m a simple Telegram bot built with grammY framework. More features coming soon!');
+});
+
+// Game command
+bot.command('game', (ctx) => {
+  const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
+  ctx.reply(
+    'Submit your Wordle results in this chat to earn letters in the meta game. ' +
+      `Play your earned letters here: ${trimmedBase}`
+  );
 });
 
 // Link command - provides portal connection token
