@@ -511,18 +511,7 @@ bot.on('message:text', async (ctx) => {
     return;
   }
 
-  // Simple responses based on keywords
-  if (text.toLowerCase().includes('hello') || text.toLowerCase().includes('hi')) {
-    ctx.reply('Hey there! How are you doing?');
-  } else if (text.toLowerCase().includes('how are you')) {
-    ctx.reply('I\'m doing great, thanks for asking! How about you?');
-  } else if (text.toLowerCase().includes('bye')) {
-    ctx.reply('Goodbye! Have a great day!');
-  } else if (text.toLowerCase().includes('what is the meaning of life')) {
-    ctx.reply('42');
-  } else {
-    ctx.reply(`You said: ${text}`);
-  }
+  return;
 });
 
 // Error handling
