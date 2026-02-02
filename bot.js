@@ -180,6 +180,39 @@ const awardPortalLetter = async ({ telegramUserId, wordleDay, answer, score }) =
   return { ok: true, status: response.status };
 };
 
+const requestResetLink = async (telegramUserId) => {
+  if (!portalBaseUrl || !portalBotToken || portalBotToken === 'replace-me') {
+    console.warn('Portal reset skipped: PORTAL_BASE_URL or PORTAL_BOT_API_TOKEN not configured.');
+    return { ok: false, status: 'skipped' };
+  }
+
+  const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
+  const response = await fetch(`${trimmedBase}/api/reset/request`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-bot-token': portalBotToken,
+    },
+    body: JSON.stringify({
+      telegram_user_id: Number(telegramUserId),
+    }),
+  });
+
+  const bodyText = await response.text().catch(() => '');
+  let data = null;
+  try {
+    data = bodyText ? JSON.parse(bodyText) : null;
+  } catch (error) {
+    data = null;
+  }
+
+  if (!response.ok) {
+    return { ok: false, status: response.status, body: bodyText, data };
+  }
+
+  return { ok: true, status: response.status, data };
+};
+
 const ensureTelegramUser = async (user) => {
   const now = Math.floor(Date.now() / 1000);
   await db.execute({
@@ -248,12 +281,13 @@ bot.command('help', (ctx) => {
   ctx.reply(
     'Here are some things you can try:\n' +
     '/help - Show this help message\n' +
-    '/about - Learn about this bot\n' +
-    '/game - How to play the meta game\n' +
-    '/link - Get a portal connection token\n' +
-    '/debug - Show debug status\n' +
-    '/debugwordle - Parse a Wordle share\n' +
-    'Or just send me a message, including Wordle results!'
+      '/about - Learn about this bot\n' +
+      '/game - How to play the meta game\n' +
+      '/link - Get a portal connection token\n' +
+      '/reset - Get a portal password reset link\n' +
+      '/debug - Show debug status\n' +
+      '/debugwordle - Parse a Wordle share\n' +
+      'Or just send me a message, including Wordle results!'
   );
 });
 
@@ -357,6 +391,45 @@ bot.command('link', async (ctx) => {
   } catch (error) {
     console.error('Failed to create link token:', error);
     ctx.reply('Sorry, I could not create a connection token right now. Please try again later.');
+  }
+});
+
+// Reset command - provides portal password reset link
+bot.command('reset', async (ctx) => {
+  if (ctx.chat?.type !== 'private') {
+    ctx.reply('Please DM me `/reset` to get your password reset link.', {
+      parse_mode: 'Markdown',
+    });
+    return;
+  }
+
+  try {
+    const result = await requestResetLink(String(ctx.from.id));
+    if (!result.ok) {
+      if (result.status === 404) {
+        ctx.reply('I could not find your account yet. Try linking first with /link.');
+        return;
+      }
+      if (result.status === 401) {
+        ctx.reply('Reset service is not configured correctly. Please contact support.');
+        return;
+      }
+      ctx.reply('Sorry, I could not create a reset link right now. Please try again later.');
+      return;
+    }
+
+    const resetUrl = result.data?.reset_url;
+    const expiresAt = result.data?.expires_at;
+    if (resetUrl) {
+      const expiryText = expiresAt ? `\nExpires at: ${expiresAt}` : '';
+      ctx.reply(`Use this link to reset your password:\n${resetUrl}${expiryText}`);
+      return;
+    }
+
+    ctx.reply('Reset link created, but no URL was returned. Please try again later.');
+  } catch (error) {
+    console.error('Failed to create reset link:', error);
+    ctx.reply('Sorry, I could not create a reset link right now. Please try again later.');
   }
 });
 
