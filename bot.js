@@ -4,7 +4,7 @@ const { Bot } = require('grammy');
 const crypto = require('crypto');
 const wol = require('wake_on_lan');
 const { exec } = require('child_process');
-const { appendFile } = require('fs/promises');
+const { appendFileSync } = require('fs');
 const path = require('path');
 
 // Create bot instance
@@ -28,7 +28,7 @@ const db = createClient({
 const WORDLE_HEADER_RE = /^Wordle\s+([\d,]+)\s+([1-6X])\/6\*?/i;
 const WORDLE_BASE_DATE = new Date(Date.UTC(2021, 5, 19));
 
-const logResetEvent = async (event, details = {}) => {
+const logResetEvent = (event, details = {}) => {
   const entry = {
     timestamp: new Date().toISOString(),
     event,
@@ -36,7 +36,7 @@ const logResetEvent = async (event, details = {}) => {
   };
 
   try {
-    await appendFile(resetLogFilePath, `${JSON.stringify(entry)}\n`, 'utf8');
+    appendFileSync(resetLogFilePath, `${JSON.stringify(entry)}\n`, 'utf8');
   } catch (error) {
     console.error('Failed to write reset debug log:', error);
   }
@@ -200,14 +200,14 @@ const awardPortalLetter = async ({ telegramUserId, wordleDay, answer, score }) =
 const requestResetLink = async (telegramUserId) => {
   if (!portalBaseUrl || !portalBotToken || portalBotToken === 'replace-me') {
     console.warn('Portal reset skipped: PORTAL_BASE_URL or PORTAL_BOT_API_TOKEN not configured.');
-    await logResetEvent('reset_skipped_not_configured', { telegramUserId });
+    logResetEvent('reset_skipped_not_configured', { telegramUserId });
     return { ok: false, status: 'skipped' };
   }
 
   const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
   const endpoint = `${trimmedBase}/api/reset/request`;
 
-  await logResetEvent('reset_request_start', {
+  logResetEvent('reset_request_start', {
     telegramUserId,
     endpoint,
   });
@@ -225,7 +225,7 @@ const requestResetLink = async (telegramUserId) => {
       }),
     });
   } catch (error) {
-    await logResetEvent('reset_request_network_error', {
+    logResetEvent('reset_request_network_error', {
       telegramUserId,
       endpoint,
       error: error instanceof Error ? error.message : String(error),
@@ -242,7 +242,7 @@ const requestResetLink = async (telegramUserId) => {
   }
 
   if (!response.ok) {
-    await logResetEvent('reset_request_failed', {
+    logResetEvent('reset_request_failed', {
       telegramUserId,
       endpoint,
       status: response.status,
@@ -252,7 +252,7 @@ const requestResetLink = async (telegramUserId) => {
     return { ok: false, status: response.status, body: bodyText, data };
   }
 
-  await logResetEvent('reset_request_succeeded', {
+  logResetEvent('reset_request_succeeded', {
     telegramUserId,
     endpoint,
     status: response.status,
@@ -479,7 +479,7 @@ bot.command('reset', async (ctx) => {
     ctx.reply('Reset link created, but no URL was returned. Please try again later.');
   } catch (error) {
     console.error('Failed to create reset link:', error);
-    await logResetEvent('reset_command_error', {
+    logResetEvent('reset_command_error', {
       telegramUserId: String(ctx.from.id),
       error: error instanceof Error ? error.message : String(error),
     });
