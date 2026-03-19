@@ -14,7 +14,7 @@ const databaseUrl = process.env.DATABASE_URL;
 const databaseToken = process.env.DATABASE_TOKEN;
 const portalBaseUrl = process.env.PORTAL_BASE_URL || 'https://your-portal.com';
 const portalBotToken = process.env.PORTAL_BOT_API_TOKEN || 'replace-me';
-const resetLogFilePath = process.env.RESET_LOG_FILE || path.join(__dirname, 'reset-debug.log');
+const resetLogFilePath = process.env.RESET_LOG_FILE || path.join('/tmp', 'reset-debug.log');
 
 if (!databaseUrl || !databaseToken) {
   throw new Error('DATABASE_URL and DATABASE_TOKEN must be set in the .env file');
