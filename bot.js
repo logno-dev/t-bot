@@ -4,6 +4,8 @@ const { Bot } = require('grammy');
 const crypto = require('crypto');
 const wol = require('wake_on_lan');
 const { exec } = require('child_process');
+const { appendFile } = require('fs/promises');
+const path = require('path');
 
 // Create bot instance
 const bot = new Bot(process.env.BOT_TOKEN);
@@ -12,6 +14,7 @@ const databaseUrl = process.env.DATABASE_URL;
 const databaseToken = process.env.DATABASE_TOKEN;
 const portalBaseUrl = process.env.PORTAL_BASE_URL || 'https://your-portal.com';
 const portalBotToken = process.env.PORTAL_BOT_API_TOKEN || 'replace-me';
+const resetLogFilePath = process.env.RESET_LOG_FILE || path.join(__dirname, 'reset-debug.log');
 
 if (!databaseUrl || !databaseToken) {
   throw new Error('DATABASE_URL and DATABASE_TOKEN must be set in the .env file');
@@ -24,6 +27,20 @@ const db = createClient({
 
 const WORDLE_HEADER_RE = /^Wordle\s+([\d,]+)\s+([1-6X])\/6\*?/i;
 const WORDLE_BASE_DATE = new Date(Date.UTC(2021, 5, 19));
+
+const logResetEvent = async (event, details = {}) => {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    event,
+    ...details,
+  };
+
+  try {
+    await appendFile(resetLogFilePath, `${JSON.stringify(entry)}\n`, 'utf8');
+  } catch (error) {
+    console.error('Failed to write reset debug log:', error);
+  }
+};
 
 const ensureSchema = async () => {
   await db.execute('PRAGMA foreign_keys = ON;');
@@ -183,20 +200,38 @@ const awardPortalLetter = async ({ telegramUserId, wordleDay, answer, score }) =
 const requestResetLink = async (telegramUserId) => {
   if (!portalBaseUrl || !portalBotToken || portalBotToken === 'replace-me') {
     console.warn('Portal reset skipped: PORTAL_BASE_URL or PORTAL_BOT_API_TOKEN not configured.');
+    await logResetEvent('reset_skipped_not_configured', { telegramUserId });
     return { ok: false, status: 'skipped' };
   }
 
   const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
-  const response = await fetch(`${trimmedBase}/api/reset/request`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-bot-token': portalBotToken,
-    },
-    body: JSON.stringify({
-      telegram_user_id: Number(telegramUserId),
-    }),
+  const endpoint = `${trimmedBase}/api/reset/request`;
+
+  await logResetEvent('reset_request_start', {
+    telegramUserId,
+    endpoint,
   });
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-bot-token': portalBotToken,
+      },
+      body: JSON.stringify({
+        telegram_user_id: Number(telegramUserId),
+      }),
+    });
+  } catch (error) {
+    await logResetEvent('reset_request_network_error', {
+      telegramUserId,
+      endpoint,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 
   const bodyText = await response.text().catch(() => '');
   let data = null;
@@ -207,8 +242,23 @@ const requestResetLink = async (telegramUserId) => {
   }
 
   if (!response.ok) {
+    await logResetEvent('reset_request_failed', {
+      telegramUserId,
+      endpoint,
+      status: response.status,
+      body: bodyText,
+      data,
+    });
     return { ok: false, status: response.status, body: bodyText, data };
   }
+
+  await logResetEvent('reset_request_succeeded', {
+    telegramUserId,
+    endpoint,
+    status: response.status,
+    hasResetUrl: Boolean(data?.reset_url),
+    expiresAt: data?.expires_at ?? null,
+  });
 
   return { ok: true, status: response.status, data };
 };
@@ -429,6 +479,10 @@ bot.command('reset', async (ctx) => {
     ctx.reply('Reset link created, but no URL was returned. Please try again later.');
   } catch (error) {
     console.error('Failed to create reset link:', error);
+    await logResetEvent('reset_command_error', {
+      telegramUserId: String(ctx.from.id),
+      error: error instanceof Error ? error.message : String(error),
+    });
     ctx.reply('Sorry, I could not create a reset link right now. Please try again later.');
   }
 });
