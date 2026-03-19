@@ -206,10 +206,14 @@ const requestResetLink = async (telegramUserId) => {
 
   const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
   const endpoint = `${trimmedBase}/api/reset/request`;
+  const timeoutMs = Number(process.env.RESET_REQUEST_TIMEOUT_MS || 10000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   logResetEvent('reset_request_start', {
     telegramUserId,
     endpoint,
+    timeoutMs,
   });
 
   let response;
@@ -223,14 +227,24 @@ const requestResetLink = async (telegramUserId) => {
       body: JSON.stringify({
         telegram_user_id: Number(telegramUserId),
       }),
+      signal: controller.signal,
+    });
+
+    logResetEvent('reset_request_response_received', {
+      telegramUserId,
+      endpoint,
+      status: response.status,
     });
   } catch (error) {
     logResetEvent('reset_request_network_error', {
       telegramUserId,
       endpoint,
       error: error instanceof Error ? error.message : String(error),
+      isAbortError: error?.name === 'AbortError',
     });
     throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 
   const bodyText = await response.text().catch(() => '');
