@@ -616,7 +616,7 @@ bot.command('update', (ctx) => {
   });
 });
 
-bot.onText(/\/rs/, async (ctx) => {
+bot.command('rs', async (ctx) => {
   const authorizedUserId = process.env.AUTHORIZED_USER_ID;
   const userId = ctx.from.id.toString();
 
