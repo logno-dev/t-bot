@@ -4,8 +4,11 @@ const { Bot } = require('grammy');
 const crypto = require('crypto');
 const wol = require('wake_on_lan');
 const { exec } = require('child_process');
+const util = require("util");
 const { appendFileSync } = require('fs');
 const path = require('path');
+
+const execAsync = util.promisify(exec);
 
 // Create bot instance
 const bot = new Bot(process.env.BOT_TOKEN);
