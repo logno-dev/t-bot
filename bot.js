@@ -345,13 +345,13 @@ bot.command('help', (ctx) => {
   ctx.reply(
     'Here are some things you can try:\n' +
     '/help - Show this help message\n' +
-      '/about - Learn about this bot\n' +
-      '/game - How to play the meta game\n' +
-      '/link - Get a portal connection token\n' +
-      '/reset - Get a portal password reset link\n' +
-      '/debug - Show debug status\n' +
-      '/debugwordle - Parse a Wordle share\n' +
-      'Or just send me a message, including Wordle results!'
+    '/about - Learn about this bot\n' +
+    '/game - How to play the meta game\n' +
+    '/link - Get a portal connection token\n' +
+    '/reset - Get a portal password reset link\n' +
+    '/debug - Show debug status\n' +
+    '/debugwordle - Parse a Wordle share\n' +
+    'Or just send me a message, including Wordle results!'
   );
 });
 
@@ -365,7 +365,7 @@ bot.command('game', (ctx) => {
   const trimmedBase = portalBaseUrl.replace(/\/+$/, '');
   ctx.reply(
     'Submit your Wordle results in this chat to earn letters in the meta game. ' +
-      `Play your earned letters here: ${trimmedBase}`
+    `Play your earned letters here: ${trimmedBase}`
   );
 });
 
@@ -379,12 +379,12 @@ bot.command('debug', (ctx) => {
 
   ctx.reply(
     'Debug status:\n' +
-      `PORTAL_BASE_URL set: ${hasPortalUrl}\n` +
-      `PORTAL_BOT_API_TOKEN set: ${hasPortalToken}\n` +
-      `DATABASE_URL set: ${hasDatabaseUrl}\n` +
-      `DATABASE_TOKEN set: ${hasDatabaseToken}\n` +
-      `Chat type: ${chatType}\n` +
-      'Note: if Wordle messages are ignored in groups, disable bot privacy mode in BotFather.'
+    `PORTAL_BASE_URL set: ${hasPortalUrl}\n` +
+    `PORTAL_BOT_API_TOKEN set: ${hasPortalToken}\n` +
+    `DATABASE_URL set: ${hasDatabaseUrl}\n` +
+    `DATABASE_TOKEN set: ${hasDatabaseToken}\n` +
+    `Chat type: ${chatType}\n` +
+    'Note: if Wordle messages are ignored in groups, disable bot privacy mode in BotFather.'
   );
 });
 
@@ -614,6 +614,27 @@ bot.command('update', (ctx) => {
       });
     });
   });
+});
+
+bot.onText(/\/rs/, async (ctx) => {
+  const authorizedUserId = process.env.AUTHORIZED_USER_ID;
+  const userId = ctx.from.id.toString();
+
+  // Check if user is authorized
+  if (authorizedUserId && userId !== authorizedUserId) {
+    ctx.reply('Unauthorized: You do not have permission to use this command.');
+    console.log(`Unauthorized update attempt from user ID: ${userId}`);
+    return;
+  }
+
+  await bot.sendMessage(ctx.chat.id, "Starting update workflow...");
+
+  try {
+    const output = await runCommand("/home/logno/steamapps/rsdw/update.sh");
+    await bot.sendMessage(ctx.chat.id, `Update complete.\n${output}`);
+  } catch (err) {
+    await bot.sendMessage(ctx.chat.id, `Update failed.\n${err.message}`);
+  }
 });
 
 // Echo any text message
