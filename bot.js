@@ -616,24 +616,51 @@ bot.command('update', (ctx) => {
   });
 });
 
-bot.command('dragon', async (ctx) => {
-  const authorizedUserId = process.env.AUTHORIZED_USER_ID;
-  const userId = ctx.from.id.toString();
+let dragonUpdateInProgress = false
 
-  // Check if user is authorized
+bot.command("dragon", async (ctx) => {
+  const authorizedUserId = process.env.AUTHORIZED_USER_ID;
+  const userId = String(ctx.from.id);
+
   if (authorizedUserId && userId !== authorizedUserId) {
-    ctx.reply('Unauthorized: You do not have permission to use this command.');
-    console.log(`Unauthorized update attempt from user ID: ${userId}`);
-    return;
+    console.log(`Unauthorized dragon update attempt from user ID: ${userId}`);
+    return ctx.reply("Unauthorized: You do not have permission to use this command.");
   }
 
-  await bot.sendMessage(ctx.chat.id, "Starting update workflow...");
+  if (dragonUpdateInProgress) {
+    return ctx.reply("Dragonwilds update is already running.");
+  }
+
+  dragonUpdateInProgress = true;
 
   try {
-    const output = await runCommand("/home/logno/steamapps/rsdw/update.sh");
-    await bot.sendMessage(ctx.chat.id, `Update complete.\n${output}`);
+    await ctx.reply("Starting update workflow...");
+
+    const { stdout, stderr } = await execAsync("/home/logno/steamapps/rsdw/update.sh", {
+      timeout: 1000 * 60 * 20,
+      shell: "/usr/bin/bash",
+    });
+
+    const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+
+    await ctx.reply(
+      output
+        ? `Update complete.\n\n${output.slice(-3500)}`
+        : "Update complete."
+    );
   } catch (err) {
-    await bot.sendMessage(ctx.chat.id, `Update failed.\n${err.message}`);
+    const errorOutput = [
+      err.stdout,
+      err.stderr,
+      err.message,
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+
+    await ctx.reply(`Update failed.\n\n${errorOutput.slice(-3500)}`);
+  } finally {
+    dragonUpdateInProgress = false;
   }
 });
 
