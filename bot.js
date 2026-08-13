@@ -505,7 +505,7 @@ bot.command('reset', async (ctx) => {
 });
 
 // Wake-on-LAN command
-bot.command('wake', (ctx) => {
+bot.command('pc1', (ctx) => {
   const authorizedUserId = process.env.AUTHORIZED_USER_ID;
   const userId = ctx.from.id.toString();
 
@@ -516,7 +516,36 @@ bot.command('wake', (ctx) => {
     return;
   }
 
-  const macAddress = process.env.TARGET_MAC_ADDRESS;
+  const macAddress = process.env.TARGET_MAC_ADDRESS1;
+
+  if (!macAddress) {
+    ctx.reply('Error: MAC address not configured in .env file');
+    return;
+  }
+
+  wol.wake(macAddress, (error) => {
+    if (error) {
+      ctx.reply(`Failed to send magic packet: ${error.message}`);
+      console.error('WOL Error:', error);
+    } else {
+      ctx.reply(`Magic packet sent to ${macAddress}!`);
+      console.log(`Magic packet sent to ${macAddress} by user ${userId}`);
+    }
+  });
+});
+
+bot.command('pc2', (ctx) => {
+  const authorizedUserId = process.env.AUTHORIZED_USER_ID;
+  const userId = ctx.from.id.toString();
+
+  // Check if user is authorized
+  if (authorizedUserId && userId !== authorizedUserId) {
+    ctx.reply('Unauthorized: You do not have permission to use this command.');
+    console.log(`Unauthorized wake attempt from user ID: ${userId}`);
+    return;
+  }
+
+  const macAddress = process.env.TARGET_MAC_ADDRESS2;
 
   if (!macAddress) {
     ctx.reply('Error: MAC address not configured in .env file');
